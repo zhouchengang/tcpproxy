@@ -41,5 +41,7 @@ while (true) {
 	if ($child_pid == -1) {
 		break;
 	}
+	//避免proxy_server宕机造成不间断fork
+	sleep(10);
 	echo "child_exit|" . $child_pid . PHP_EOL;
 }

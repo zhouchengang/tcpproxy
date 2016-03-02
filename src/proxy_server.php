@@ -32,8 +32,9 @@ $proxy_client = $proxy_server->listen($proxy_conf['public_ip'], $proxy_conf['pub
 
 $proxy_server->set($setting);
 
-$process_handle = new swoole_process(function(swoole_process $process_handle) use ($proxy_server) {
+$process_handle = new swoole_process(function(swoole_process $process_handle) use ($argv, $proxy_server) {
 	echo "process_start|" . $process_handle->pid . PHP_EOL;
+	App::set_cli_process_title("php {$argv[0]} proxy_server_process");
 
 	while(1) {
 		try {
