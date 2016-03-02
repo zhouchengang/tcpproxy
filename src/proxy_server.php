@@ -178,18 +178,23 @@ $proxy_server->on('managerStart', function(swoole_server $proxy_server) use ($ar
 
 $proxy_server->on('managerStop', function(swoole_server $proxy_server) {});
 
-$proxy_server->on('workerStart', function(swoole_server $proxy_server, int $worker_id) use ($argv) {
+$proxy_server->on('workerStart', function(swoole_server $proxy_server, $worker_id) use ($argv) {
 	echo "worker_start|" . getmypid() . PHP_EOL;
+	if ($proxy_server->taskworker) {
+		App::set_cli_process_title("php {$argv[0]} proxy_server_task_worker");
+	} else {
+		App::set_cli_process_title("php {$argv[0]} proxy_server_event_worker");
+	}
 });
 
-$proxy_server->on('workerStop', function(swoole_server $proxy_server, int $worker_id) {});
+$proxy_server->on('workerStop', function(swoole_server $proxy_server, $worker_id) {});
 
-$proxy_server->on('workerError', function(swoole_server $proxy_server, int $worker_id, int $worker_pid, int $exit_code, int $signo) {});
+$proxy_server->on('workerError', function(swoole_server $proxy_server, $worker_id, $worker_pid, $exit_code, $signo) {});
 
 /**
  * close
  */
-$proxy_server->on('close', function(swoole_server $proxy_server, int $fd, int $from_reactor_id) use ($process_handle) {
+$proxy_server->on('close', function(swoole_server $proxy_server, $fd, $from_reactor_id) use ($process_handle) {
 	echo 'player_close|' . getmypid() . '|' . json_encode($proxy_server->connection_info($fd)). PHP_EOL;
 
 	$process_handle->write(json_encode([
@@ -200,7 +205,7 @@ $proxy_server->on('close', function(swoole_server $proxy_server, int $fd, int $f
    	]));
 });
 
-$proxy_client->on('close', function(swoole_server $proxy_client, int $fd, int $from_reactor_id) use ($process_handle) {
+$proxy_client->on('close', function(swoole_server $proxy_client, $fd, $from_reactor_id) use ($process_handle) {
 	echo 'machine_close|' . getmypid() . '|' . json_encode($proxy_client->connection_info($fd)). PHP_EOL;
 
 	$process_handle->write(json_encode([
@@ -214,7 +219,7 @@ $proxy_client->on('close', function(swoole_server $proxy_client, int $fd, int $f
 /**
  * connect
  */
-$proxy_server->on('connect', function(swoole_server $proxy_server, int $fd, int $from_reactor_id) use ($process_handle) {
+$proxy_server->on('connect', function(swoole_server $proxy_server, $fd, $from_reactor_id) use ($process_handle) {
 	echo 'player_connect|' . getmypid() . '|' . json_encode($proxy_server->connection_info($fd)). PHP_EOL;
 
 	$process_handle->write(json_encode([
@@ -225,7 +230,7 @@ $proxy_server->on('connect', function(swoole_server $proxy_server, int $fd, int 
 	]));
 });
 
-$proxy_client->on('connect', function(swoole_server $proxy_client, int $fd, int $from_reactor_id) use ($process_handle) {
+$proxy_client->on('connect', function(swoole_server $proxy_client, $fd, $from_reactor_id) use ($process_handle) {
 	echo 'machine_connect|' . getmypid() . '|' . json_encode($proxy_client->connection_info($fd)). PHP_EOL;
 
 	$process_handle->write(json_encode([
@@ -236,7 +241,7 @@ $proxy_client->on('connect', function(swoole_server $proxy_client, int $fd, int 
 	]));
 });
 
-$proxy_server->on('receive', function(swoole_server $proxy_server, int $fd, int $from_reactor_id, string $data) use ($process_handle) {
+$proxy_server->on('receive', function(swoole_server $proxy_server, $fd, $from_reactor_id, $data) use ($process_handle) {
 	$process_handle->write(json_encode([
 		'from'   => 'player',
 		'fd'     => $fd,
@@ -246,7 +251,7 @@ $proxy_server->on('receive', function(swoole_server $proxy_server, int $fd, int 
 	]));
 });
 
-$proxy_client->on('receive', function(swoole_server $proxy_client, int $fd, int $from_reactor_id, string $data) use ($process_handle) {
+$proxy_client->on('receive', function(swoole_server $proxy_client, $fd, $from_reactor_id, $data) use ($process_handle) {
 	$process_handle->write(json_encode([
 		'from'   => 'machine',
 		'fd'     => $fd,
