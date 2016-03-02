@@ -37,8 +37,14 @@ php proxy_client.php
 
 赶紧部署试试吧
 
+##演示 
 
-使用要点
+为了在本机测试，我简化A,B为本地，通过本地9999访问本地6379应用，效果
+
+![](./src/tcpproxy.gif)
+
+
+##使用要点
 * 需要一台有公网ip运行proxy_server.php开放给用户访问
 * 在任意网络运行proxy_client.php来代理你的应用
 
