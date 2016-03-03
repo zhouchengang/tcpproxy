@@ -173,6 +173,7 @@ class ProxyClient
 			}
 			$this->_target_handle->send_target($data);
 		} else {
+			$this->_proxy_client_handle->sleep();
 			$this->_target_data[] = $data;
 		}
 	}
@@ -201,7 +202,6 @@ class ProxyClient
 	}
 
 	public function target_connect_callback(swoole_client $target_client_handle) {
-		$this->_proxy_client_handle->sleep();
 		if ($this->_target_data) {
 			$data = implode('', $this->_target_data);
 			$this->_target_data = [];
