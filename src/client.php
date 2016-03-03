@@ -2,6 +2,9 @@
 class ProxyTarget
 {
 
+	/**
+	 * @var ProxyClient
+	 */
 	private $_proxy_handle;
 	private $_target_client_handle;
 
@@ -12,8 +15,8 @@ class ProxyTarget
 
 	private $_pid;
 
-	public function __construct($proxy_handle, $target_server_ip, $target_server_port) {
-		$this->_proxy_handle = $proxy_handle;
+	public function __construct(ProxyClient $proxy_handle, $target_server_ip, $target_server_port) {
+		$this->_proxy_handle        = $proxy_handle;
 		$this->_target_server_ip    = $target_server_ip;
 		$this->_target_server_port  = $target_server_port;
 
@@ -49,6 +52,10 @@ class ProxyTarget
 		$this->close_proxy();
 	}
 
+	public function check_connected() {
+		return $this->_target_connected;
+	}
+
 	public function connect(swoole_client $target_server_handle) {
 		echo "target_connect|" . $this->_pid  . "|" . $this->_target_server_ip . ':' . $this->_target_server_port. PHP_EOL;
 
@@ -56,9 +63,7 @@ class ProxyTarget
 
 		if (isset($this->_target_client_handle->ccb)) {
 			call_user_func_array($this->_target_client_handle->ccb, array(
-				$this->_pid,
-				$this->_target_client_handle,
-				$this->_proxy_handle ? $this->_proxy_handle : null
+				$this->_target_client_handle
 			));
 		}
 	}
@@ -103,11 +108,13 @@ class ProxyClient
 
 	private $_pid;
 
+	/**
+	 * @var swoole_client
+	 */
 	private $_proxy_client_handle = null;
 
 	private $_target_handle = null;
-
-	private $_msg_queue_handle = null;
+	private $_target_data = [];
 
 	public function __construct($proxy_server_ip, $proxy_server_port, $target_server_ip, $target_server_port) {
 		$this->_pid = getmypid();
@@ -141,12 +148,6 @@ class ProxyClient
 		$this->_proxy_connected = false;
 
 		$this->close_target();
-
-		if ($this->_msg_queue_handle
-			&& msg_queue_exists($this->_pid)) {
-			msg_remove_queue($this->_msg_queue_handle);
-			$this->_msg_queue_handle = null;
-		}
 	}
 
 	public function connect(swoole_client $proxy_client_handle) {
@@ -160,17 +161,20 @@ class ProxyClient
 			echo "proxy_target|" . $this->_pid . PHP_EOL;
 			$this->_target_handle = new ProxyTarget($this, $this->target_server_ip, $this->target_server_port);
 			$this->_target_handle->run(array($this, 'target_connect_callback'));
-
-			$this->_msg_queue_handle = msg_get_queue($this->_pid);
-			//clear
-			msg_remove_queue($this->_msg_queue_handle);
-			//use again
-			$this->_msg_queue_handle = msg_get_queue($this->_pid);
 		}
 
 		echo "proxy_receive|" . $this->_pid . "|" . base64_encode($data) . PHP_EOL;
 
-		msg_send($this->_msg_queue_handle, 1, $data, false, false);
+		if ($this->_target_handle->check_connected()) {
+			if ($this->_target_data) {
+				$this->_target_data[] = $data;
+				$data = implode('', $this->_target_data);
+				$this->_target_data = [];
+			}
+			$this->_target_handle->send_target($data);
+		} else {
+			$this->_target_data[] = $data;
+		}
 	}
 
 	public function get_msg_queue() {
@@ -196,26 +200,13 @@ class ProxyClient
 		}
 	}
 
-	public function target_connect_callback($proxy_pid, $target_client_handle, $proxy_handle) {
-		$pid = pcntl_fork();
-		if (0 == $pid) {
-			//fork child
-			$pid = getmypid();
-			echo "fork_child|" . getmypid() . PHP_EOL;
-			while (1) {
-				if (!msg_queue_exists($proxy_pid)) {
-					echo "queue_exit|" . $pid . PHP_EOL;
-
-					break;
-				}
-
-				if (msg_receive($proxy_handle->get_msg_queue(), 0, $message_type, 10240, $message, false)) {
-					echo "queue_message|" . $pid . "|" . base64_encode($message) . PHP_EOL;
-					$target_client_handle->send($message);
-				}
-			}
-
-			swoole_event_exit();
+	public function target_connect_callback(swoole_client $target_client_handle) {
+		$this->_proxy_client_handle->sleep();
+		if ($this->_target_data) {
+			$data = implode('', $this->_target_data);
+			$this->_target_data = [];
+			$target_client_handle->send($data);
 		}
+		$this->_proxy_client_handle->wakeup();
 	}
 }
