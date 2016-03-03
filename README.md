@@ -44,8 +44,8 @@ php proxy_client.php
 ![](./src/tcpproxy.gif)
 
 
-##使用要点
+##模拟内网花生壳功能时使用要点
 * 需要一台有公网ip运行proxy_server.php开放给用户访问
-* 在任意网络运行proxy_client.php来代理你的应用
+* 在你的内网运行proxy_client.php来代理你的应用
 
 更多疑问请+qq群 233415606 or [website http://xingqiba.sinaapp.com](http://xingqiba.sinaapp.com)
