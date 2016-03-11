@@ -129,6 +129,13 @@ $process_handle = new swoole_process(function(swoole_process $process_handle) us
 						}
 					}
 
+					//避免出现force_close延迟是收到数据
+					if (!isset(App::$player_clients[$player_fd])) {
+						echo "reforce_close|" . json_encode($task_detail['client']) . PHP_EOL;
+						$proxy_server->close($player_fd);
+						$task_detail['event'] = null;
+					}
+
 					if ('receive' == $task_detail['event']) {
 						$player_data = base64_decode($task_detail['data']);
 						$machine_fd  = App::$player_clients[$player_fd]['machine_fd'];
