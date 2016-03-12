@@ -1,5 +1,16 @@
 /**
  *
+ * 星期八 QQ 174171262
+ * http://xingqiba.sinaapp.com
+ *
+ * 代理转发
+ *
+ * Usage
+ *
+ * make
+ * ./sproxy -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10
+ *
+ * https://github.com/jonnywang/tcpproxy/blob/master/README.md
  *
  */
 
@@ -63,7 +74,7 @@ typedef struct {
 } ProxyServer;
 
 void show_usage(const char *name) {
-	fprintf(stderr, "Usage like %s -s 127.0.0.1:7777 -t 127.0.0.1:6379 -c 10\n", name);
+	fprintf(stderr, "Usage like %s -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10\n", name);
 }
 
 int connect_server(const char *host, int port) {
@@ -199,10 +210,8 @@ int main(int argc, char *argv[]) {
 	if (argc != 7
 		|| strcmp(argv[1], "-s") != 0
 		|| strstr(argv[2], ":") == NULL
-		|| strlen(argv[2]) > 15
 		|| strcmp(argv[3], "-t") != 0
 		|| strstr(argv[4], ":") == NULL
-		|| strlen(argv[4]) > 15
 		|| strcmp(argv[5], "-c") != 0) {
 		show_usage((const char *)argv[0]);
 		return 1;
