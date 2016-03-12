@@ -49,4 +49,13 @@ php proxy_client.php
 * 需要一台有公网ip运行proxy_server.php开放给用户访问
 * 在你的内网运行proxy_client.php来代理你的应用
 
+##为了调试更方便，对于内内网无php&swoole环境的，我们提供了sproxy，功能同proxy_client.php
+```c
+make
+./sproxy -s 127.0.0.1:7777 -t 127.0.0.1:6379 -c 10
+```
+* -s 指定proxy_server.php内部地址和端口
+* -t 指定需要代理app运行地址和端口
+* -c 指定开启进程数量
+
 更多疑问请+qq群 233415606 or [website http://xingqiba.sinaapp.com](http://xingqiba.sinaapp.com)
