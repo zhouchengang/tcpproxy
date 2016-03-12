@@ -31,6 +31,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <signal.h>
 
 #ifdef TRUE
 #undef TRUE
@@ -64,15 +65,28 @@ void message(const char *filename, int line, const char *fmt, ...) {
 
 	now = time(NULL);
 	strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %X", localtime(&now));
-	fprintf(stdout, "%s|%u|%s,%d|%s\n", tbuf, getpid(), filename, line, sbuf);
+	fprintf(stderr, "%s|%u|%s,%d|%s\n", tbuf, getpid(), filename, line, sbuf);
 }
 
 typedef struct {
 	char proxy_server[16];
-	char target_server[16];
 	int proxy_port;
+	char target_server[16];
 	int target_port;
+	int running;
+	int child_num;
+	int daemon;
+	pid_t master_pid;
 } ProxyServer;
+
+ProxyServer ps = {"127.0.0.1", 7777, "127.0.0.1", 6379, 1, 10, 0, 0};
+
+void signal_handle(int sig) {
+	ps.running = 0;
+	if (ps.master_pid) {
+		kill(-(ps.master_pid), 9);
+	}
+}
 
 void show_usage(const char *name) {
 	fprintf(stderr, "Usage like %s -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10\n", name);
@@ -113,9 +127,8 @@ int connect_server(const char *host, int port) {
 }
 
 void *child_thread(void * arg) {
-	SLOG("thread %ld start", (long)pthread_self());
-
-	ProxyServer *ps = (ProxyServer *)((void *)arg);
+thread_loop: {
+	SLOG("thread %u loop start", pthread_self());
 
 	int cfd = -1,
 		tfd = -1,
@@ -124,7 +137,7 @@ void *child_thread(void * arg) {
 		n = 0,
 		m = 0;
 
-	cfd = connect_server(ps->proxy_server, ps->proxy_port);
+	cfd = connect_server(ps.proxy_server, ps.proxy_port);
 	if (cfd < 0) {
 		goto endprocess;
 	}
@@ -132,7 +145,7 @@ void *child_thread(void * arg) {
 	fd_set readfds, exceptfds;
 	char buf[1024];
 
-	while (TRUE) {
+	while (ps.running) {
 		FD_ZERO(&readfds);
 		FD_ZERO(&exceptfds);
 
@@ -165,7 +178,7 @@ void *child_thread(void * arg) {
 			SLOG("trigger proxy read");
 			if (tfd == -1) {
 				SLOG("trigger target connect");
-				tfd = connect_server(ps->target_server, ps->target_port);
+				tfd = connect_server(ps.target_server, ps.target_port);
 				if (tfd < 0) {
 					goto endprocess;
 				}
@@ -203,22 +216,27 @@ void *child_thread(void * arg) {
 		}
 	}
 
-	SLOG("thread %ld disconnect server %s:%d success", (long)pthread_self(), ps->proxy_server, ps->proxy_port);
-	SLOG("thread %ld end", (long)pthread_self());
+	SLOG("thread %u disconnect server %s:%d success", pthread_self(), ps.proxy_server, ps.proxy_port);
+	SLOG("thread %u loop end", pthread_self());
+}
+	if (ps.running) {
+		SLOG("thread %u loop work", pthread_self());
+		goto thread_loop;
+	}
 
 	return (void *)0;
 }
 
-void child_process(ProxyServer ps, pid_t pre_pid, int index) {
+void child_process(pid_t pre_pid, int index) {
 	SLOG("forked child start|%d,%u,%u", index, pre_pid, getpid());
 
 	int pt_i = 0;
 	void *pt_r = NULL;
-	pthread_t pt[50];
+	pthread_t pt[2];
 	int pt_num = sizeof(pt) / sizeof (pt[0]);
 
 	for (pt_i = 0; pt_i < pt_num; pt_i++) {
-		if (pthread_create(&pt[pt_i], NULL, child_thread, &ps) != 0) {
+		if (pthread_create(&pt[pt_i], NULL, child_thread, NULL) != 0) {
 			SLOG("pthread_create failed");
 		}
 	}
@@ -236,41 +254,65 @@ void child_process(ProxyServer ps, pid_t pre_pid, int index) {
 int main(int argc, char *argv[]) {
 	setlocale(LC_ALL, "");
 
-	if (argc != 7
-		|| strcmp(argv[1], "-s") != 0
-		|| strstr(argv[2], ":") == NULL
-		|| strcmp(argv[3], "-t") != 0
-		|| strstr(argv[4], ":") == NULL
-		|| strcmp(argv[5], "-c") != 0) {
+	if (argc == 1) {
 		show_usage((const char *)argv[0]);
 		return 1;
 	}
 
-	ProxyServer ps;
-	if (sscanf(argv[2], "%[0-9.]:%d", ps.proxy_server, &ps.proxy_port) != 2
-		|| sscanf(argv[4], "%[0-9.]:%d", ps.target_server, &ps.target_port) != 2) {
-		show_usage((const char *)argv[0]);
-		return 1;
+	int c;
+	while ((c = getopt (argc, argv, "dhs:t:c:")) != -1) {
+		switch (c) {
+			case 's':
+				if (sscanf(optarg, "%[0-9.]:%d", ps.proxy_server, &ps.proxy_port) != 2) {
+					show_usage((const char *)argv[0]);
+					return 1;
+				}
+				break;
+			case 't':
+				if (sscanf(optarg, "%[0-9.]:%d", ps.target_server, &ps.target_port) != 2) {
+					show_usage((const char *)argv[0]);
+					return 1;
+				}
+				break;
+			case 'c':
+				ps.child_num = strtol(optarg, NULL, 10);
+				break;
+			case 'd':
+				ps.daemon = 1;
+				break;
+			default:
+				show_usage((const char *)argv[0]);
+				return 1;
+		}
 	}
 
-	int forked_child_num = 1;
-	if (sscanf(argv[6], "%d", &forked_child_num) != 1
-		|| forked_child_num < 1) {
-		show_usage((const char *)argv[0]);
-		return 1;
+	SLOG("sproxy would to connect %s:%d for %s:%d with %d forked child process", ps.proxy_server, ps.proxy_port, ps.target_server, ps.target_port, ps.child_num);
+
+	signal(SIGINT,  signal_handle);
+	signal(SIGTERM, signal_handle);
+
+	if (ps.daemon) {
+		switch (fork()) {
+			case -1:break;
+			case 0:break;
+			default:_exit(0);
+		}
+
+		setsid();
+		umask(0);
+		close(0);
+		close(1);
+		close(2);
 	}
 
-	SLOG("sproxy want to connect %s:%d for %s:%d with %d",
-			ps.proxy_server, ps.proxy_port,
-			ps.target_server, ps.target_port,
-			forked_child_num);
+	ps.running = 1;
+	ps.master_pid = getpid();
 
-	int wait_child_status = 0,
-		forked_child_now = 1;
+	int wait_child_status = 0, forked_child_now = 1;
 
 	pid_t forked_pid = -1, wait_child_pid = 0;
 
-	for (forked_child_now = 1; forked_child_now < forked_child_num; forked_child_now++) {
+	for (forked_child_now = 1; forked_child_now < ps.child_num; forked_child_now++) {
 		forked_pid = fork();
 		if (forked_pid == 0) {
 			break;
@@ -279,16 +321,16 @@ int main(int argc, char *argv[]) {
 
 	//子进程
 	if (forked_pid == 0) {
-		child_process(ps, wait_child_pid, forked_child_now);
+		child_process(wait_child_pid, forked_child_now);
 		exit(0);
 	}
 
 	//父进程
-	while (TRUE) {
+	while (ps.running) {
 		forked_pid = fork();
 		if (forked_pid == 0) {
 			//child
-			child_process(ps, wait_child_pid, forked_child_now);
+			child_process(wait_child_pid, forked_child_now);
 			exit(0);
 		}
 
