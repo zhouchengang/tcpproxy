@@ -6,11 +6,12 @@
 
 
 ```php
+//守护进程模式
+$proxy_conf['daemonize'] = 0;
 //开放给用户的公网的ip
 $proxy_conf['public_ip'] = '192.168.1.100';
 //开放给用户的公网的端口
 $proxy_conf['public_port'] = 9999;
-
 //代理内部中转端口
 $proxy_conf['public_proxy_port'] = 6677;
 
@@ -18,12 +19,8 @@ $proxy_conf['public_proxy_port'] = 6677;
 $proxy_conf['local_ip'] = '192.168.1.101';
 //内部无法开放给公网的端口
 $proxy_conf['local_port'] = 6379;
-
 //开放连接数
 $proxy_conf['open_num'] = 10;
-
-//守护进程模式
-$proxy_conf['daemonize'] = 0;
 ```
 
 在B服务器运行
@@ -40,7 +37,24 @@ php proxy_client.php
 
 ##演示 
 
-为了在本机测试，我简化A,B为本地，通过本地9999访问本地6379应用，效果
+###为了在本机测试，我简化A,B为本地，通过本地9999访问本地6379应用,
+```
+//守护进程模式
+$proxy_conf['daemonize'] = 0;
+//开放给用户的公网的ip
+$proxy_conf['public_ip'] = '127.0.0.1';
+//开放给用户的公网的端口
+$proxy_conf['public_port'] = 9999;
+//代理内部中转端口
+$proxy_conf['public_proxy_port'] = 6677;
+
+//内部无法开放给公网的ip
+$proxy_conf['local_ip'] = '127.0.0.1';
+//内部无法开放给公网的端口
+$proxy_conf['local_port'] = 6379;
+//开放连接数
+$proxy_conf['open_num'] = 10;
+```
 
 ![](./src/tcpproxy.gif)
 
@@ -52,7 +66,7 @@ php proxy_client.php
 ##为了调试更方便，对于内内网无php&swoole环境的，我们提供了sproxy，功能同proxy_client.php
 ```c
 make
-./sproxy -s 127.0.0.1:7777 -t 127.0.0.1:6379 -c 10
+./sproxy -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10
 ```
 * -s 指定proxy_server.php内部地址和端口
 * -t 指定需要代理app运行地址和端口
