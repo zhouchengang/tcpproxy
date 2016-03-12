@@ -89,7 +89,7 @@ void signal_handle(int sig) {
 }
 
 void show_usage(const char *name) {
-	fprintf(stderr, "Usage like %s -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10\n", name);
+	fprintf(stderr, "Usage like %s -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10 -d\n", name);
 }
 
 int connect_server(const char *host, int port) {
