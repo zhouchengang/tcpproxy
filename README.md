@@ -7,7 +7,8 @@
 
 ```php
 //守护进程模式
-$proxy_conf['daemonize'] = 0;
+$proxy_conf['daemon'] = 0;
+
 //开放给用户的公网的ip
 $proxy_conf['public_ip'] = '192.168.1.100';
 //开放给用户的公网的端口
@@ -39,8 +40,6 @@ php proxy_client.php
 
 ###为了在本机测试，我简化A,B为本地，通过本地9999访问本地6379应用,
 ```
-//守护进程模式
-$proxy_conf['daemonize'] = 0;
 //开放给用户的公网的ip
 $proxy_conf['public_ip'] = '127.0.0.1';
 //开放给用户的公网的端口

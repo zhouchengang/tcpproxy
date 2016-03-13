@@ -5,7 +5,7 @@ define('ROOT', __DIR__);
 include ROOT . '/client.php';
 $sproxy_conf = include ROOT . '/conf.php';
 
-if (0 == $sproxy_conf['daemon']) {
+if ($sproxy_conf['daemon']) {
 	$pid = pcntl_fork();
 	if ($pid != 0) {
 		exit(0);
