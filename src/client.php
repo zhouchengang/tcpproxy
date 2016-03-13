@@ -19,7 +19,7 @@ class SProxyTarget {
 
 	private $_pid;
 
-	public function __construct(ProxyClient $proxy_handle, $target_server_ip, $target_server_port) {
+	public function __construct(SProxyClient $proxy_handle, $target_server_ip, $target_server_port) {
 		$this->_proxy_handle        = $proxy_handle;
 		$this->_target_server_ip    = $target_server_ip;
 		$this->_target_server_port  = $target_server_port;
