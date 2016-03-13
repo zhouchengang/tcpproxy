@@ -66,8 +66,12 @@ $proxy_conf['open_num'] = 10;
 ##为了调试更方便，对于内内网无php&swoole环境的，我们提供了sproxy，功能同proxy_client.php
 ```c
 make
-./sproxy -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10
+#单以多进程模式运行
+./sproxy_process -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10 -d
+#或以多进程多线程模式运行
+./sproxy_thread -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10 -d
 ```
+* -d 指定以守护进程模式运行
 * -s 指定proxy_server.php内部地址和端口
 * -t 指定需要代理app运行地址和端口
 * -c 指定开启进程数量

@@ -1,6 +1,10 @@
 <?php
-class ProxyTarget
-{
+
+/**
+ *
+ */
+
+class SProxyTarget {
 
 	/**
 	 * @var ProxyClient
@@ -95,7 +99,7 @@ class ProxyTarget
 }
 
 
-class ProxyClient
+class SProxyClient
 {
 
 	public $proxy_server_ip;
@@ -159,7 +163,7 @@ class ProxyClient
 	public function receive(swoole_client $proxy_client_handle, $data) {
 		if (is_null($this->_target_handle)) {
 			echo "proxy_target|" . $this->_pid . PHP_EOL;
-			$this->_target_handle = new ProxyTarget($this, $this->target_server_ip, $this->target_server_port);
+			$this->_target_handle = new SProxyTarget($this, $this->target_server_ip, $this->target_server_port);
 			$this->_target_handle->run(array($this, 'target_connect_callback'));
 		}
 

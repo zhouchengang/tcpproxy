@@ -2,10 +2,17 @@
 
 define('ROOT', __DIR__);
 
-include ROOT . '/conf.php';
 include ROOT . '/client.php';
+$sproxy_conf = include ROOT . '/conf.php';
 
-for ($i = 2; $i < $proxy_conf['open_num']; $i++) {
+if (0 == $sproxy_conf['daemon']) {
+	$pid = pcntl_fork();
+	if ($pid != 0) {
+		exit(0);
+	}
+}
+
+for ($i = 2; $i < $sproxy_conf['open_num']; $i++) {
 	$pid = pcntl_fork();
 	if ($pid == 0) {
 		break;
@@ -18,11 +25,11 @@ if ($pid == 0) {
 
 	{
 		//开启连接proxy_server
-		(new ProxyClient(
-			$proxy_conf['public_ip'],
-			$proxy_conf['public_proxy_port'],
-			$proxy_conf['local_ip'],
-			$proxy_conf['local_port']
+		(new SProxyClient(
+			$sproxy_conf['public_ip'],
+			$sproxy_conf['public_proxy_port'],
+			$sproxy_conf['local_ip'],
+			$sproxy_conf['local_port']
 		))->run();
 	}
 
