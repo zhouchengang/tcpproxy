@@ -232,7 +232,7 @@ void child_process(pid_t pre_pid, int index) {
 
 	int pt_i = 0;
 	void *pt_r = NULL;
-	pthread_t pt[2];
+	pthread_t pt[50];
 	int pt_num = sizeof(pt) / sizeof (pt[0]);
 
 	for (pt_i = 0; pt_i < pt_num; pt_i++) {
