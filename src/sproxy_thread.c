@@ -34,6 +34,10 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+#ifndef SPROXY_THREAD_NUM
+#define SPROXY_THREAD_NUM 50
+#endif
+
 #ifdef TRUE
 #undef TRUE
 #endif
@@ -233,7 +237,7 @@ void child_process(pid_t pre_pid, int index) {
 
 	int pt_i = 0;
 	void *pt_r = NULL;
-	pthread_t pt[50];
+	pthread_t pt[SPROXY_THREAD_NUM];
 	int pt_num = sizeof(pt) / sizeof (pt[0]);
 
 	for (pt_i = 0; pt_i < pt_num; pt_i++) {
@@ -287,7 +291,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	SLOG("sproxy would to connect %s:%d for %s:%d with %d forked child process", ps.proxy_server, ps.proxy_port, ps.target_server, ps.target_port, ps.child_num);
+	SLOG("sproxy would to connect %s:%d for %s:%d with %d:%d forked child process", ps.proxy_server, ps.proxy_port, ps.target_server, ps.target_port, ps.child_num, SPROXY_THREAD_NUM);
 
 	signal(SIGINT,  signal_handle);
 	signal(SIGTERM, signal_handle);
