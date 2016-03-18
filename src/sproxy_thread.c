@@ -8,7 +8,7 @@
  * Usage
  *
  * make
- * ./sproxy -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10
+ * ./sproxy_thread -s 127.0.0.1:6677 -t 127.0.0.1:6379 -c 10
  *
  * https://github.com/jonnywang/tcpproxy/blob/master/README.md
  *
@@ -32,6 +32,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 #ifdef TRUE
 #undef TRUE
@@ -43,7 +44,6 @@
 
 typedef enum { FALSE, TRUE } Boolean;
 
-#define min(m,n) ((m) < (n) ? (m) : (n))
 #define max(m,n) ((m) > (n) ? (m) : (n))
 #define SLOG(fmt, ...) message(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
@@ -160,8 +160,8 @@ thread_loop: {
 		}
 
 		ready = select(nfds + 1, &readfds, NULL, &exceptfds, NULL);
-		if (ready < 0 && errno == EINTR) {
-
+		if (ready < 0
+		    && errno == EINTR) {
 			continue;
 		}
 
@@ -219,6 +219,7 @@ thread_loop: {
 	SLOG("thread %u disconnect server %s:%d success", pthread_self(), ps.proxy_server, ps.proxy_port);
 	SLOG("thread %u loop end", pthread_self());
 }
+
 	if (ps.running) {
 		SLOG("thread %u loop work", pthread_self());
 		goto thread_loop;
