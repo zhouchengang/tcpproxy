@@ -7,7 +7,6 @@ include ROOT . '/conf.php';
 class SProxyServer {
 
 	private $_proxy_server = null;
-	private $_proxy_target = null;
 
 	private $_conf = [];
 	private $_setting = [];
@@ -15,8 +14,9 @@ class SProxyServer {
 	private $_gtable = null;
 
 	public function __construct() {
-		$this->_conf = include ROOT . '/conf.php';
-
+		//解析
+		$this->parse_conf(include ROOT . '/conf.php');
+		//配置
 		$this->_setting = [
 			'daemonize'          => $this->_conf['daemon'],
 			'backlog'            => 128,
@@ -27,6 +27,19 @@ class SProxyServer {
 			'enable_reuse_port ' => 1,
 			'log_file' 			 => ROOT . '/logs/proxy.log', //指定swoole错误日志文件
 		];
+	}
+
+	private function parse_conf($conf) {
+		$this->_conf['daemon'] = $conf['daemon'];
+		$this->_conf['host']   = $conf['host'];
+
+		foreach ($conf['ports'] as $ports) {
+			if (!isset($this->_conf['port'])) {
+				$this->_conf['port'] = $ports[0];
+			}
+
+			$this->_conf['proxy'][$ports[0]] = $ports[1];
+		}
 	}
 
 	private function set_process_title($title) {
@@ -52,6 +65,11 @@ class SProxyServer {
 		}
 
 		echo date('Y-m-d H:i:s|') . $message . PHP_EOL;
+	}
+
+	private function get_connection_with_port(swoole_server $proxy_server, $connection_fd) {
+		$client_info = $proxy_server->getClientInfo($connection_fd);
+		return $client_info['server_port'];
 	}
 
 	public function proxy_master_start(swoole_server $proxy_server) {
@@ -83,14 +101,14 @@ class SProxyServer {
 	public function proxy_client_close(swoole_server $proxy_server, $client_fd, $from_reactor_id) {
 		$this->log('client_close|%s', $client_fd);
 
-		$client_detail = $this->_gtable->get('c' . $client_fd);
+		$client_detail = $this->_gtable->get($client_fd);
 
-		$this->_gtable->del('c' . $client_fd);
+		$this->_gtable->del($client_fd);
 
 		if ($client_detail) {
 			$target_fd = $client_detail['tfd'];
 			if ($client_detail['status'] > 0) {
-				$this->_gtable->del('t' . $target_fd);
+				$this->_gtable->del($target_fd);
 				$proxy_server->close($target_fd, true);
 			}
 		}
@@ -99,14 +117,14 @@ class SProxyServer {
 	public function proxy_target_close(swoole_server $proxy_server, $target_fd, $from_reactor_id) {
 		$this->log('target_close|%s', $target_fd);
 
-		$target_detail = $this->_gtable->get('t' . $target_fd);
+		$target_detail = $this->_gtable->get($target_fd);
 
-		$this->_gtable->del('t' . $target_fd);
+		$this->_gtable->del($target_fd);
 
 		if ($target_detail) {
 			$client_fd = $target_fd['cfd'];
 			if ($target_detail['status'] > 0) {
-				$this->_gtable->del('c' . $client_fd);
+				$this->_gtable->del($client_fd);
 				$proxy_server->close($client_fd, true);
 			}
 		}
@@ -115,24 +133,35 @@ class SProxyServer {
 	public function proxy_client_connect(swoole_server $proxy_server, $client_fd, $from_reactor_id) {
 		$this->log('client_connect|%s', $client_fd);
 
-		foreach ($this->_gtable as $name => $info) {
-			if ($info['status'] == 0
-				&& $info['type'] == 't') {
-				//target
-				$this->_gtable->incr($name, 'status', 1);
-				$this->_gtable->incr($name, 'cfd', $client_fd);
-				//client
-				$this->_gtable->set('c' . $client_fd, [
-					'type'   => 'c',
-					'tfd'    => $info['tfd'],
-					'cfd'    => $client_fd,
-					'status' => 1,
-				]);
-				break;
+		$client_from_port   = $this->get_connection_with_port($proxy_server, $client_fd);
+		$client_target_port = $this->_conf['proxy'][$client_from_port];
+
+		//尝试等待
+		$loop = 1;
+		while ($loop <= 3) {
+			foreach ($this->_gtable as $name => $info) {
+				if ($info['status'] == 0
+					&& $info['type'] == 't'
+					&& $info['port'] == $client_target_port) {
+					//target
+					$this->_gtable->incr($name, 'status', 1);
+					$this->_gtable->incr($name, 'cfd', $client_fd);
+					//client
+					$this->_gtable->set($client_fd, [
+						'type'   => 'c',
+						'tfd'    => $info['tfd'],
+						'cfd'    => $client_fd,
+						'status' => 1,
+						'port'   => $client_from_port,
+					]);
+					break 2;
+				}
 			}
+			sleep(1);
+			$loop++;
 		}
 
-		if (false == $this->_gtable->exist('c' . $client_fd)) {
+		if (false == $this->_gtable->exist($client_fd)) {
 			$this->log('not_found_target|force_close_client|%s', $client_fd);
 			$proxy_server->close($client_fd, true);
 		}
@@ -141,18 +170,19 @@ class SProxyServer {
 	public function proxy_target_connect(swoole_server $proxy_target, $target_fd, $from_reactor_id) {
 		$this->log('target_connect|%s', $target_fd);
 
-		$this->_gtable->set('t' . $target_fd, [
+		$this->_gtable->set($target_fd, [
 			'type'   => 't',
 			'tfd'    => $target_fd,
 			'cfd'    => 0,
 			'status' => 0,
+			'port'  => $this->get_connection_with_port($proxy_target, $target_fd),
 		]);
 	}
 
 	public function proxy_client_receive(swoole_server $proxy_server, $client_fd, $from_reactor_id, $data) {
 		$this->log('client_receive|%s', $client_fd);
 
-		$client_detail = $this->_gtable->get('c' . $client_fd);
+		$client_detail = $this->_gtable->get($client_fd);
 
 		if ($client_detail) {
 			$target_fd = $client_detail['tfd'];
@@ -169,7 +199,7 @@ class SProxyServer {
 	}
 
 	public function proxy_target_receive(swoole_server $proxy_server, $target_fd, $from_reactor_id, $data) {
-		$target_detail = $this->_gtable->get('t' . $target_fd);
+		$target_detail = $this->_gtable->get($target_fd);
 
 		if ($target_detail) {
 			$client_fd = $target_detail['cfd'];
@@ -192,10 +222,33 @@ class SProxyServer {
 		$this->_gtable->column('cfd',    swoole_table::TYPE_INT);
 		$this->_gtable->column('tfd',    swoole_table::TYPE_INT);
 		$this->_gtable->column('status', swoole_table::TYPE_INT);
+		$this->_gtable->column('port',   swoole_table::TYPE_INT);
 		$this->_gtable->create();
 
-		$this->_proxy_server = new swoole_server($this->_conf['public_ip'], $this->_conf['public_port']);
-		$this->_proxy_target = $this->_proxy_server->listen($this->_conf['public_ip'], $this->_conf['public_proxy_port'], SWOOLE_SOCK_TCP);
+		$bind_port = [
+			$this->_conf['port']
+		];
+		$this->_proxy_server = new swoole_server($this->_conf['host'], $this->_conf['port']);
+
+		foreach ($this->_conf['proxy'] as $open_port => $local_port) {
+			if (!in_array($open_port, $bind_port)) {
+				$bind_port[] = $open_port;
+
+				$client_server_handle = $this->_proxy_server->listen($this->_conf['host'], $open_port, SWOOLE_SOCK_TCP);
+				$client_server_handle->on('close',    array($this, 'proxy_client_close'));
+				$client_server_handle->on('connect',  array($this, 'proxy_client_connect'));
+				$client_server_handle->on('receive',  array($this, 'proxy_client_receive'));
+			}
+
+			if (!in_array($local_port, $bind_port)) {
+				$bind_port[] = $local_port;
+
+				$target_server_handle = $this->_proxy_server->listen($this->_conf['host'], $local_port, SWOOLE_SOCK_TCP);
+				$target_server_handle->on('close', [$this, 'proxy_target_close']);
+				$target_server_handle->on('connect', [$this, 'proxy_target_connect']);
+				$target_server_handle->on('receive', [$this, 'proxy_target_receive']);
+			}
+		}
 
 		$this->_proxy_server->set($this->_setting);
 
@@ -206,14 +259,9 @@ class SProxyServer {
 		$this->_proxy_server->on('workerStop',   array($this, 'proxy_worker_stop'));
 		$this->_proxy_server->on('workerError',  array($this, 'proxy_worker_error'));
 
-		$this->_proxy_server->on('close',  array($this, 'proxy_client_close'));
-		$this->_proxy_target->on('close',  array($this, 'proxy_target_close'));
-
+		$this->_proxy_server->on('close',    array($this, 'proxy_client_close'));
 		$this->_proxy_server->on('connect',  array($this, 'proxy_client_connect'));
-		$this->_proxy_target->on('connect',  array($this, 'proxy_target_connect'));
-
 		$this->_proxy_server->on('receive',  array($this, 'proxy_client_receive'));
-		$this->_proxy_target->on('receive',  array($this, 'proxy_target_receive'));
 
 		$this->_proxy_server->start();
 	}

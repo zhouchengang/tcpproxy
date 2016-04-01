@@ -3,7 +3,20 @@
 define('ROOT', __DIR__);
 
 include ROOT . '/client.php';
-$sproxy_conf = include ROOT . '/conf.php';
+$sproxy_conf = [
+	'daemon' => 0,
+	'process_num' => 10,
+	//指定代理服务地址+端口
+	'agent' => [
+		'host' => '127.0.0.1',
+		'port' => 7777,
+	],
+	//指定目标app地址+端口
+	'apps' => [
+		'host' => '127.0.0.1',
+		'port' => 6379,
+	],
+];
 
 if ($sproxy_conf['daemon']) {
 	$pid = pcntl_fork();
@@ -12,7 +25,7 @@ if ($sproxy_conf['daemon']) {
 	}
 }
 
-for ($i = 2; $i < $sproxy_conf['open_num']; $i++) {
+for ($i = 2; $i < $sproxy_conf['process_num']; $i++) {
 	$pid = pcntl_fork();
 	if ($pid == 0) {
 		break;
@@ -26,10 +39,10 @@ if ($pid == 0) {
 	{
 		//开启连接proxy_server
 		(new SProxyClient(
-			$sproxy_conf['public_ip'],
-			$sproxy_conf['public_proxy_port'],
-			$sproxy_conf['local_ip'],
-			$sproxy_conf['local_port']
+			$sproxy_conf['agent']['host'],
+			$sproxy_conf['agent']['port'],
+			$sproxy_conf['apps']['host'],
+			$sproxy_conf['apps']['port']
 		))->run();
 	}
 
