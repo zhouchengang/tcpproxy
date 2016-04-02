@@ -130,7 +130,7 @@ class SProxyServer {
 	public function proxy_client_connect(swoole_server $proxy_server, $client_fd, $from_reactor_id) {
 		$client_info = $proxy_server->connection_info($client_fd);
 
-		$this->log('client_connect|%s', $client_fd, json_encode($client_info));
+		$this->log('client_connect|%s,%s', $client_fd, json_encode($client_info));
 
 		$client_from_port   = $client_info['server_port'];
 		$client_target_port = $this->_conf['proxy'][$client_from_port][0];
