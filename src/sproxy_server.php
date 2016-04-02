@@ -105,7 +105,7 @@ class SProxyServer {
 			if ($client_detail['status'] > 0) {
 				$this->log('client_close|%s,cport=%s,tport=%s,close_target,%s', $client_fd, $client_detail['cport'], $client_detail['tport'], $target_fd);
 				$this->_gtable->del($target_fd);
-				$proxy_server->close($target_fd, true);
+				$proxy_server->close($target_fd);
 			}
 		}
 	}
@@ -122,7 +122,7 @@ class SProxyServer {
 			if ($target_detail['status'] > 0) {
 				$this->log('target_close|%s,cport=%s,dport=%s,close_client,%s', $target_fd, $target_detail['cport'], $target_detail['tport'], $client_fd);
 				$this->_gtable->del($client_fd);
-				$proxy_server->close($client_fd, true);
+				$proxy_server->close($client_fd);
 			}
 		}
 	}
@@ -170,7 +170,7 @@ class SProxyServer {
 
 		if (false == $this->_gtable->exist($client_fd)) {
 			$this->log('client_connect|%s,force_close', $client_fd);
-			$proxy_server->close($client_fd, true);
+			$proxy_server->close($client_fd);
 		} else {
 			$this->log('client_connect|%s,found_target,%s', $client_fd, $target_fd);
 		}
