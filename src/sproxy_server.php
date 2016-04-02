@@ -67,11 +67,6 @@ class SProxyServer {
 		echo date('Y-m-d H:i:s|') . $message . PHP_EOL;
 	}
 
-	private function get_connection_with_port(swoole_server $proxy_server, $connection_fd) {
-		$client_info = $proxy_server->getClientInfo($connection_fd);
-		return $client_info['server_port'];
-	}
-
 	public function proxy_master_start(swoole_server $proxy_server) {
 		$this->set_process_title('php ' . $this->_conf['file_name'] . ' proxy_server_master');
 	}
@@ -133,9 +128,11 @@ class SProxyServer {
 	}
 
 	public function proxy_client_connect(swoole_server $proxy_server, $client_fd, $from_reactor_id) {
-		$this->log('client_connect|%s,%s', $client_fd, json_encode($proxy_server->getClientInfo($client_fd)));
+		$client_info = $proxy_server->connection_info($client_fd);
 
-		$client_from_port   = $this->get_connection_with_port($proxy_server, $client_fd);
+		$this->log('client_connect|%s', $client_fd, json_encode($client_info));
+
+		$client_from_port   = $client_info['server_port'];
 		$client_target_port = $this->_conf['proxy'][$client_from_port][0];
 
 		$this->log('client_connect|%s,src_port=%s,dest_port=%s', $client_fd, $client_from_port, $client_target_port);
@@ -157,6 +154,7 @@ class SProxyServer {
 					//client
 					$this->_gtable->set($client_fd, [
 						'type'   => 'c',
+						'ip'     => $client_info['remote_ip'],
 						'tfd'    => $info['tfd'],
 						'cfd'    => $client_fd,
 						'status' => 1,
@@ -179,15 +177,18 @@ class SProxyServer {
 	}
 
 	public function proxy_target_connect(swoole_server $proxy_target, $target_fd, $from_reactor_id) {
-		$this->log('target_connect|%s', $target_fd);
+		$target_info = $proxy_target->connection_info($target_fd);
+
+		$this->log('target_connect|%s,%s', $target_fd, json_encode($target_info));
 
 		$this->_gtable->set($target_fd, [
 			'type'   => 't',
+			'ip'	 => $target_info['remote_ip'],
 			'tfd'    => $target_fd,
 			'cfd'    => 0,
 			'status' => 0,
 			'cport'  => 0,
-			'tport'  => $this->get_connection_with_port($proxy_target, $target_fd),
+			'tport'  => $target_info['server_port'],
 		]);
 	}
 
@@ -203,7 +204,7 @@ class SProxyServer {
 				$this->log('client_receive|%s,cport=%s,tport=%s,requestto,%s', $client_fd, $client_detail['cport'], $client_detail['tport'], $target_fd);
 				//HTTP
 				if ($this->_conf['proxy'][$client_detail['cport']][1]) {
-					$data = preg_replace("/Connection: keep-alive\r\n/", "Connection: Close\r\n", $data, 1);
+					$data = preg_replace("/Connection: keep-alive\r\n/", "Connection: Close\r\nX-REAL-IP: " . $client_detail['ip'] . "\r\n", $data, 1);
 				}
 				$proxy_server->send($target_fd, $data);
 			} else {
@@ -237,6 +238,7 @@ class SProxyServer {
 
 		$this->_gtable = new swoole_table(1024);
 		$this->_gtable->column('type',   swoole_table::TYPE_STRING, 10);
+		$this->_gtable->column('ip',   	 swoole_table::TYPE_STRING, 15);
 		$this->_gtable->column('cfd',    swoole_table::TYPE_INT);
 		$this->_gtable->column('tfd',    swoole_table::TYPE_INT);
 		$this->_gtable->column('status', swoole_table::TYPE_INT);
