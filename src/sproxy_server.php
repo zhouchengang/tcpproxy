@@ -200,7 +200,7 @@ class SProxyServer {
 			$target_fd = $client_detail['tfd'];
 			if ($client_detail['status'] > 0
 				&& $proxy_server->exist($target_fd)) {
-				$this->log('client_receive|%s,cport=%,tport=%s,requestto,%s', $client_fd, $client_detail['cport'], $client_detail['tport'], $target_fd);
+				$this->log('client_receive|%s,cport=%s,tport=%s,requestto,%s', $client_fd, $client_detail['cport'], $client_detail['tport'], $target_fd);
 				//HTTP
 				if ($this->_conf['proxy'][$client_detail['cport']][1]) {
 					$data = preg_replace("/Connection: keep-alive\r\n/", "Connection: Close\r\n", $data, 1);
@@ -222,7 +222,7 @@ class SProxyServer {
 			$client_fd = $target_detail['cfd'];
 			if ($target_detail['status'] > 0
 				&& $proxy_server->exist($client_fd)) {
-				$this->log('target_receive|%s,cport=%,tport=%s,responseto,%s', $target_fd, $target_detail['cport'], $target_detail['tport'], $client_fd);
+				$this->log('target_receive|%s,cport=%s,tport=%s,responseto,%s', $target_fd, $target_detail['cport'], $target_detail['tport'], $client_fd);
 				$proxy_server->send($client_fd, $data);
 			} else {
 				$this->log('target_receive|%s,not_found_client,%s', $target_fd, $client_fd);
