@@ -12,7 +12,7 @@ $proxy_conf['daemon'] = 1;
 $proxy_conf['host'] = '192.168.1.100';
 //开放端口
 $proxy_conf['ports'] = [
-	[9999, 7777],
+	[9999, 7777, 0],  //开放给用户端口，内部转发端口，是否http
 ];
 
 //sproxy_client使用

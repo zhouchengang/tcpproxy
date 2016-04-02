@@ -38,7 +38,7 @@ class SProxyServer {
 				$this->_conf['port'] = $ports[0];
 			}
 
-			$this->_conf['proxy'][$ports[0]] = $ports[1];
+			$this->_conf['proxy'][$ports[0]] = [$ports[1], $ports[2]];
 		}
 	}
 
@@ -108,6 +108,7 @@ class SProxyServer {
 		if ($client_detail) {
 			$target_fd = $client_detail['tfd'];
 			if ($client_detail['status'] > 0) {
+				$this->log('client_close|%s,cport=%s,tport=%s,close_target,%s', $client_fd, $client_detail['cport'], $client_detail['tport'], $target_fd);
 				$this->_gtable->del($target_fd);
 				$proxy_server->close($target_fd, true);
 			}
@@ -122,8 +123,9 @@ class SProxyServer {
 		$this->_gtable->del($target_fd);
 
 		if ($target_detail) {
-			$client_fd = $target_fd['cfd'];
+			$client_fd = $target_detail['cfd'];
 			if ($target_detail['status'] > 0) {
+				$this->log('target_close|%s,cport=%s,dport=%s,close_client,%s', $target_fd, $target_detail['cport'], $target_detail['tport'], $client_fd);
 				$this->_gtable->del($client_fd);
 				$proxy_server->close($client_fd, true);
 			}
@@ -131,28 +133,35 @@ class SProxyServer {
 	}
 
 	public function proxy_client_connect(swoole_server $proxy_server, $client_fd, $from_reactor_id) {
-		$this->log('client_connect|%s', $client_fd);
+		$this->log('client_connect|%s,%s', $client_fd, json_encode($proxy_server->getClientInfo($client_fd)));
 
 		$client_from_port   = $this->get_connection_with_port($proxy_server, $client_fd);
-		$client_target_port = $this->_conf['proxy'][$client_from_port];
+		$client_target_port = $this->_conf['proxy'][$client_from_port][0];
 
+		$this->log('client_connect|%s,src_port=%s,dest_port=%s', $client_fd, $client_from_port, $client_target_port);
+
+		$target_fd = -1;
 		//尝试等待
 		$loop = 1;
 		while ($loop <= 3) {
 			foreach ($this->_gtable as $name => $info) {
 				if ($info['status'] == 0
 					&& $info['type'] == 't'
-					&& $info['port'] == $client_target_port) {
+					&& $info['tport'] == $client_target_port) {
 					//target
 					$this->_gtable->incr($name, 'status', 1);
 					$this->_gtable->incr($name, 'cfd', $client_fd);
+					$this->_gtable->incr($name, 'cport', $client_from_port);
+					//
+					$target_fd = $info['tfd'];
 					//client
 					$this->_gtable->set($client_fd, [
 						'type'   => 'c',
 						'tfd'    => $info['tfd'],
 						'cfd'    => $client_fd,
 						'status' => 1,
-						'port'   => $client_from_port,
+						'cport'   => $client_from_port,
+						'tport'   => $client_target_port,
 					]);
 					break 2;
 				}
@@ -162,8 +171,10 @@ class SProxyServer {
 		}
 
 		if (false == $this->_gtable->exist($client_fd)) {
-			$this->log('not_found_target|force_close_client|%s', $client_fd);
+			$this->log('client_connect|%s,force_close', $client_fd);
 			$proxy_server->close($client_fd, true);
+		} else {
+			$this->log('client_connect|%s,found_target,%s', $client_fd, $target_fd);
 		}
 	}
 
@@ -175,7 +186,8 @@ class SProxyServer {
 			'tfd'    => $target_fd,
 			'cfd'    => 0,
 			'status' => 0,
-			'port'  => $this->get_connection_with_port($proxy_target, $target_fd),
+			'cport'  => 0,
+			'tport'  => $this->get_connection_with_port($proxy_target, $target_fd),
 		]);
 	}
 
@@ -188,29 +200,35 @@ class SProxyServer {
 			$target_fd = $client_detail['tfd'];
 			if ($client_detail['status'] > 0
 				&& $proxy_server->exist($target_fd)) {
-
+				$this->log('client_receive|%s,cport=%,tport=%s,requestto,%s', $client_fd, $client_detail['cport'], $client_detail['tport'], $target_fd);
+				//HTTP
+				if ($this->_conf['proxy'][$client_detail['cport']][1]) {
+					$data = preg_replace("/Connection: keep-alive\r\n/", "Connection: Close\r\n", $data, 1);
+				}
 				$proxy_server->send($target_fd, $data);
 			} else {
-				$this->log('target_not_exists|' . $target_fd);
+				$this->log('client_receive|%s,not_found_target,%s', $client_fd, $target_fd);
 			}
 		} else {
-			$this->log('not_found_client|' . $client_fd);
+			$this->log('client_receive|%s,not_found_target', $client_fd);
 		}
 	}
 
 	public function proxy_target_receive(swoole_server $proxy_server, $target_fd, $from_reactor_id, $data) {
+		$this->log('target_receive|%s', $target_fd);
 		$target_detail = $this->_gtable->get($target_fd);
 
 		if ($target_detail) {
 			$client_fd = $target_detail['cfd'];
 			if ($target_detail['status'] > 0
 				&& $proxy_server->exist($client_fd)) {
+				$this->log('target_receive|%s,cport=%,tport=%s,responseto,%s', $target_fd, $target_detail['cport'], $target_detail['tport'], $client_fd);
 				$proxy_server->send($client_fd, $data);
 			} else {
-				$this->log('target_not_exists|' . $target_fd);
+				$this->log('target_receive|%s,not_found_client,%s', $target_fd, $client_fd);
 			}
 		} else {
-			$this->log('not_found_target|' . $target_fd);
+			$this->log('target_receive|%s,not_found_client', $target_fd);
 		}
 	}
 
@@ -222,7 +240,8 @@ class SProxyServer {
 		$this->_gtable->column('cfd',    swoole_table::TYPE_INT);
 		$this->_gtable->column('tfd',    swoole_table::TYPE_INT);
 		$this->_gtable->column('status', swoole_table::TYPE_INT);
-		$this->_gtable->column('port',   swoole_table::TYPE_INT);
+		$this->_gtable->column('cport',  swoole_table::TYPE_INT);
+		$this->_gtable->column('tport',  swoole_table::TYPE_INT);
 		$this->_gtable->create();
 
 		$bind_port = [
@@ -240,10 +259,10 @@ class SProxyServer {
 				$client_server_handle->on('receive',  array($this, 'proxy_client_receive'));
 			}
 
-			if (!in_array($local_port, $bind_port)) {
-				$bind_port[] = $local_port;
+			if (!in_array($local_port[0], $bind_port)) {
+				$bind_port[] = $local_port[0];
 
-				$target_server_handle = $this->_proxy_server->listen($this->_conf['host'], $local_port, SWOOLE_SOCK_TCP);
+				$target_server_handle = $this->_proxy_server->listen($this->_conf['host'], $local_port[0], SWOOLE_SOCK_TCP);
 				$target_server_handle->on('close', [$this, 'proxy_target_close']);
 				$target_server_handle->on('connect', [$this, 'proxy_target_connect']);
 				$target_server_handle->on('receive', [$this, 'proxy_target_receive']);
