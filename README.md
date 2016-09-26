@@ -61,4 +61,4 @@ make
 * -t 指定需要代理app运行地址和端口
 * -c 指定开启进程数量
 
-更多疑问请+qq群 233415606 or [website http://xingqiba.sinaapp.com](http://xingqiba.sinaapp.com)
+更多疑问请+qq群 233415606 or [website http://www.hnphper.com](http://www.hnphper.com)
