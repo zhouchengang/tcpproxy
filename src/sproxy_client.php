@@ -4,7 +4,7 @@ define('ROOT', __DIR__);
 
 include ROOT . '/client.php';
 $sproxy_conf = [
-	'daemon' => 0,
+	'daemon' => 1,
 	'process_num' => 10,
 	//指定代理服务地址+端口
 	'agent' => [
